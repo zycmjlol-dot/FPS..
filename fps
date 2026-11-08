@@ -1,0 +1,96 @@
+-- [[ Mobile FPS Booster & Lag Cleaner ]] --
+-- รันบน Client (LocalScript) ใช้ได้กับทุกแมพ
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local Terrain = workspace:FindFirstChildOfClass("Terrain")
+local localPlayer = Players.LocalPlayer
+
+-- 1. ปิดเอฟเฟกต์แสงเงาและโพสต์โพรเซสซิ่งที่กินสเปก
+local function optimizeLighting()
+	Lighting.GlobalShadows = false
+	Lighting.FogEnd = 9e9
+	Lighting.Brightness = 2
+	
+	-- ลบเอฟเฟกต์หนักๆ ออกทั้งหมด
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child:IsA("PostEffect") or child:IsA("Sky") or child:IsA("Atmosphere") or child:IsA("Clouds") then
+			child:Destroy()
+		end
+	end
+end
+
+-- 2. ลดคุณภาพกราฟิกของ Terrain (พื้นผิวธรรมชาติ)
+local function optimizeTerrain()
+	if Terrain then
+		Terrain.WaterWaveSize = 0
+		Terrain.WaterWaveSpeed = 0
+		Terrain.WaterTransparency = 0
+		Terrain.WaterReflectance = 0
+		pcall(function()
+			sethiddenproperty(Terrain, "Decoration", false)
+		end)
+	end
+end
+
+-- 3. ลบ/เคลียร์ของตกแต่งรกๆ ใน Workspace ที่ทำให้แลค (เช่น พาร์ทเล็กๆ เอฟเฟกต์ ต้นไม้ หญ้า ฯลฯ)
+local function cleanupDecorations()
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		-- ลบพาร์ทที่เป็นของตกแต่งขนาดเล็ก หรือพวกเอฟเฟกต์ ประกายไฟ ควัน เลเซอร์
+		if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+			obj:Destroy()
+		elseif obj:IsA("BasePart") then
+			-- ปิดเงาของวัตถุทั้งหมดเพื่อช่วยเพิ่ม FPS
+			obj.CastShadow = false
+			
+			-- ถ้าเป็นพาร์ทตกแต่งชิ้นเล็กๆ ที่ไม่มีผลต่อการเล่น ลบออกเพื่อลดโพลีกอน
+			if obj.Size.Magnitude < 2 and not obj.Anchored and obj.Parent ~= localPlayer.Character then
+				-- ปิดการชนเพื่อลดภาระฟิสิกส์
+				obj.CanCollide = false
+				obj.CanQuery = false
+			end
+		elseif obj:IsA("MeshPart") then
+			obj.CastShadow = false
+			-- ลดรายละเอียดวัสดุเพื่อความลื่น
+			obj.Material = Enum.Material.SmoothPlastic
+		elseif obj:IsA("Decal") or obj:IsA("Texture") then
+			-- ลบภาพแปะ/ลายพื้นผิวรกๆ ออก
+			obj:Destroy()
+		end
+	end
+end
+
+-- 4. ตั้งค่ากราฟิกของตัวเกมให้ต่ำสุด (ระดับฮาร์ดแวร์ฝั่ง Client)
+local function setLowGraphics()
+	pcall(function()
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+	end)
+	
+	-- ปิดเอฟเฟกต์วัสดุขั้นสูง
+	for _, mat in ipairs(Enum.Material:GetEnumItems()) do
+		pcall(function()
+			workspace.Terrain:SetMaterialColor(mat, Color3.new(1, 1, 1))
+		end)
+	end
+end
+
+-- รันฟังก์ชันทั้งหมดทันทีที่สคริปต์ทำงาน
+optimizeLighting()
+optimizeTerrain()
+setLowGraphics()
+cleanupDecorations()
+
+-- ดักจับกรณีมีแมพโหลดของเพิ่มทีหลัง (เช่น เดินไปโซนใหม่) ให้เคลียร์เรื่อยๆ แบบเบาๆ
+workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Decal") or obj:IsA("Texture") then
+		task.defer(function()
+			if obj and obj.Parent then
+				obj:Destroy()
+			end
+		end)
+	elseif obj:IsA("BasePart") then
+		obj.CastShadow = false
+	end
+end)
+
+print("FPS Booster (Mobile) Activated! ลื่นขึ้นแน่นอน.")
